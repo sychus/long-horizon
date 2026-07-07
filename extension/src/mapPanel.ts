@@ -156,18 +156,26 @@ export class MapPanel implements vscode.Disposable {
       position: absolute; display: none;
       background: var(--vscode-editorHoverWidget-background);
       border: 1px solid var(--vscode-editorHoverWidget-border, transparent);
-      padding: 6px 10px; border-radius: 4px; font-size: 11px;
-      pointer-events: none; z-index: 20; max-width: 300px;
+      padding: 8px 12px; border-radius: 4px; font-size: 11px;
+      pointer-events: none; z-index: 20; max-width: 320px;
       color: var(--vscode-editorHoverWidget-foreground);
+      line-height: 1.5;
+    }
+    #tooltip .tag {
+      display: inline-block; font-size: 9px; font-weight: 700;
+      letter-spacing: 1px; padding: 1px 5px; border-radius: 3px;
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+      vertical-align: middle; margin-right: 4px;
+    }
+    #tooltip .preview {
+      display: block; margin-top: 4px;
+      color: var(--vscode-descriptionForeground);
+      font-style: italic; line-height: 1.4;
     }
 
-    /* Pulse animation for live events */
-    @keyframes pulse {
-      0% { r: attr(r); opacity: 1; }
-      50% { opacity: 0.4; }
-      100% { r: attr(r); opacity: 1; }
-    }
-    .pulsing { animation: pulse 0.6s ease-in-out 3; }
+    /* Legend pct */
+    #token-panel .pct { color: var(--vscode-descriptionForeground); }
   </style>
 </head>
 <body>
