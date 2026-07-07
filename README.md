@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="extension/icon.png" width="128" alt="Long Horizon" />
+</p>
+
 # Long Horizon
 
 **Live observability for MemPalace MCP retrieval — token costs, latency, and spatial traversal, visualized in real time inside VS Code.**
