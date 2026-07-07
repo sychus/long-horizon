@@ -1,0 +1,22 @@
+{
+  "name": "long-horizon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Transparent MCP stdio proxy + visual observability for MemPalace retrieval",
+  "type": "module",
+  "scripts": {
+    "poc": "tsx src/harness.ts",
+    "proxy": "tsx src/proxy.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "js-tiktoken": "^1.0.21",
+    "ws": "^8.21.0"
+  }
+}
