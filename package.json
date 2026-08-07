@@ -22,8 +22,7 @@
     "typecheck": "tsc --noEmit",
     "poc": "tsx src/harness.ts",
     "dev:proxy": "tsx src/proxy.ts",
-    "dev:palace": "tsx cli/palace.ts",
-    "prepare": "tsc || exit 0"
+    "dev:palace": "tsx cli/palace.ts"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
