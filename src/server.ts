@@ -11,7 +11,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
-import type { LongHorizonEvent } from "./events";
+import type { LongHorizonEvent } from "./events.js";
 
 export interface LensServer {
   /** Push an event to all connected WebSocket clients and the in-memory buffer. */

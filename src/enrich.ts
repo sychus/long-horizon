@@ -12,7 +12,7 @@ import type {
   PalaceLocation,
   JsonRpcRequest,
   JsonRpcResponse,
-} from "./events";
+} from "./events.js";
 
 type Args = Record<string, unknown>;
 

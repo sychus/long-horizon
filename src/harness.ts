@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import WebSocket from "ws";
-import type { JsonRpcResponse, LongHorizonEvent, PalaceEvent } from "./events";
+import type { JsonRpcResponse, LongHorizonEvent, PalaceEvent } from "./events.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

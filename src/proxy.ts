@@ -23,10 +23,10 @@ import {
   type JsonRpcRequest,
   type JsonRpcResponse,
   type LongHorizonEvent,
-} from "./events";
-import { estimateTokens } from "./tokens";
-import { enrich } from "./enrich";
-import { startServer, type LensServer } from "./server";
+} from "./events.js";
+import { estimateTokens } from "./tokens.js";
+import { enrich } from "./enrich.js";
+import { startServer, type LensServer } from "./server.js";
 
 // ---- config -------------------------------------------------------------
 

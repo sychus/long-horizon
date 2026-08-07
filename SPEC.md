@@ -92,7 +92,9 @@ The POC (validated) proves the proxy can intercept this traffic transparently. T
 
 ### Key constraints
 
-1. **Proxy is the ONLY process that spawns the Docker container.** MemPalace uses a file lock; two writers crash. The proxy owns the child process lifecycle.
+1. **Proxy is the ONLY process that spawns the Docker container.** The proxy owns the child process lifecycle.
+
+   *Corrected in §11.2:* the original claim here — "MemPalace uses a file lock; two writers crash" — is too broad. Measured on MemPalace 3.5.0: two MCP servers run concurrently against one volume without complaint. Only `mine` takes the exclusive lock.
 2. **The proxy must be transparent.** Claude Code must not detect its presence. Every byte is forwarded verbatim. Zero modification to the JSON-RPC stream.
 3. **Extension is read-only.** It observes events. It never injects messages into the stdio pipe.
 
@@ -463,7 +465,282 @@ Files to create:
 
 ---
 
-## 11. Resolved Decisions
+## 11. Per-project palaces (`palace` CLI)
+
+Added after v1. Long Horizon observes a palace; the `palace` CLI creates and
+verifies one. The split is deliberate — every mutation lives in one tool with one
+set of rules, and constraint #3 (the extension is read-only) stays intact.
+
+### 11.1 Storage model
+
+**One wing per project, one shared store.**
+
+| Concept | Realization |
+|---|---|
+| Store | Docker volume `mempalace-atlas` — shared, derived, disposable |
+| Wing | One project (its slug) |
+| Room | A directory under `.palace/` |
+| Drawer | A markdown file in a room |
+| Port | `19420 + FNV1a(slug) % 100`, recorded in `.mcp.json` |
+
+The repository is the source of truth; the volume is a rebuildable index. This
+inverts nothing about MemPalace — it is how `mine` already works — but it makes
+the palace reviewable in pull requests, which is what keeps it honest.
+
+Wings are MemPalace's namespace mechanism and tunnels only link wings *within* a
+store, so a shared store is what makes cross-project links possible. Verified: a
+single query returns hits from two different projects' wings.
+
+The store is deliberately **not** `mempalace-data`. That volume holds auto-mined
+conversation transcripts; mixing curated project drawers into it would put back
+exactly the noise §11.3 excludes. Two stores, two jobs — one remembers
+conversations, one maps projects. Override with `PALACE_VOLUME`.
+
+The port stays per-project: each Claude Code session runs its own proxy, and the
+extension has to find the right one.
+
+### 11.2 Concurrency
+
+A shared store means two projects can touch it at once. Measured on MemPalace
+3.5.0:
+
+| Operation | Concurrent on one volume |
+|---|---|
+| MCP server (the read path — ~all runtime usage) | Works. No exclusive lock. |
+| `mine` (only during `palace sync`) | Loser exits non-zero: `palace … is held by PID N`. Files nothing. |
+
+It fails safe — a clean refusal, not corruption — but it does fail, and the
+unretried loser's drawers are simply absent from the map. `palace sync`
+therefore retries on lock contention (5 attempts, 3s apart) and scopes its prune
+to its own wing so one project can never prune another's drawers.
+
+Verified: two simultaneous `palace sync` runs, one hitting contention twice,
+both completing with all drawers filed.
+
+### 11.3 Taxonomy enforcement
+
+`.palace/mempalace.yaml` declares the wing and the seven canonical rooms. Each
+room carries exactly one keyword — its own name — and MemPalace matches keywords
+against the mined file's path, so the containing directory determines the room.
+
+Verified against MemPalace 3.5.0 with adversarial filenames:
+
+| File | Contains keyword | Routed to |
+|---|---|---|
+| `decisions/adr-002-tests-harness-choice.md` | `tests` | `decisions` |
+| `architecture/docs-pipeline.md` | `docs` | `architecture` |
+| `runbooks/glossary-restore.md` | `glossary` | `runbooks` |
+| `inbox/unsorted-thought.md` | — | `inbox` (empty-keyword fallback) |
+
+Synonym keywords were rejected: they would reintroduce exactly the filename
+ambiguity this layout removes.
+
+The config is generated and compared by exact string equality, so `renderConfig`
+must be byte-stable. Any hand edit is reported as drift rather than absorbed.
+
+### 11.4 Ingestion
+
+Curated only. `palace sync` mines `.palace/` — never the source tree. The config
+lives at `.palace/mempalace.yaml` rather than the repo root precisely so the mine
+root can be `.palace/` (MemPalace resolves the config relative to the mined
+directory).
+
+Room scaffolding uses `.gitkeep`, never `README.md`. Measured: a room README was
+mined and ranked **first** in search for its own boilerplate. Nothing with a
+document extension may sit in a room unless it is a real drawer.
+
+### 11.5 Verification (`palace doctor`)
+
+Anchors — repo-relative paths a drawer describes — are what make a drawer
+falsifiable. Checks, with failures exiting non-zero so the command can gate CI:
+
+| Check | Severity |
+|---|---|
+| Config matches canonical taxonomy; wing matches slug | fail |
+| All seven room directories present | fail |
+| No markdown outside a room | fail |
+| Frontmatter `room:` agrees with containing directory | fail |
+| Every anchor resolves | fail |
+| Body ≥ 40 chars | fail |
+| **Per-room disk count == index count, scoped to this wing** | fail |
+| This project's wing exists in the shared store | fail |
+| `.mcp.json` matches this project's store, wing and port | fail |
+| Drawer has no anchors / no frontmatter | warn |
+| Anchored file modified after the drawer's `updated:` date | warn |
+| Drawers sitting in `inbox` | warn |
+| Port also derived by a sibling wing | warn |
+
+Reconciliation is scoped to this project's wing, never the palace-wide total —
+that number moves whenever an unrelated repo syncs, which would report failures
+that are not this project's and mask ones that are. Sibling wings are reported
+as context, never as a problem: they are the point of a shared store.
+
+The disk-vs-index reconciliation exists because of a measured failure mode:
+drawers under ~40 characters are silently skipped by the miner. Threshold
+measured on MemPalace 3.5.0 — a 20-char body was skipped, 40 and above filed.
+The file exists, appears filed, and is not searchable. Nothing else surfaces it.
+
+### 11.6 Bootstrapping an existing codebase (`palace scan`)
+
+`palace init` produces an empty building, which is useless on a repository that
+already has years of history. `palace scan` is the entry point for any repo: it
+reads the working tree and writes the factual skeleton of the map.
+
+**File discovery** goes through `git ls-files` plus `--others --exclude-standard`
+— tracked files *and* untracked ones git does not ignore. Walking the tree
+directly would mean reimplementing `.gitignore` badly and mining `node_modules`
+on the first run; ignoring untracked files would miss a module written that
+morning.
+
+**What it writes**, all anchored to real paths:
+
+| Room | Drawer | Derived from |
+|---|---|---|
+| `architecture` | Structure overview | module inventory, file counts |
+| `architecture` | One per top-level module | source files under it |
+| `docs` | Entry points and commands | manifest `bin`/`main`/`scripts`/deps |
+| `docs` | Configuration surface | root config files by filename |
+| `tests` | Test topology | test paths by convention |
+
+**What it refuses to write.** `decisions`, `runbooks` and `glossary` are left
+empty. Rationale, operational knowledge and domain vocabulary are not recoverable
+from source, and a scanner that produced them would be generating confident
+fiction — the precise failure this design exists to prevent.
+
+Absence is itself recorded: when no tests are detected, the test-topology drawer
+says so rather than being omitted, because "this codebase has no automated tests"
+is load-bearing information about the map.
+
+**Provenance.** Every scanned drawer carries `origin: scan, reviewed: false`.
+Scan may only overwrite a drawer that is unconfirmed scan output; missing
+provenance counts as human. Re-running after a year never destroys authored
+knowledge.
+
+### 11.7 Coverage
+
+`doctor` answers "is what is written correct?". Coverage answers "is anything
+written at all?" — a palace can pass the first while failing the second badly:
+two drawers, forty undocumented files, and a clean green report.
+
+Anchors make it measurable. Directory anchors expand to the files beneath them,
+so a module drawer covers its module without listing every file.
+
+Two numbers are reported, and reporting only the first would be misleading:
+
+- **mapped** — any drawer anchors it. Usually ~100% straight after a scan.
+- **verified** — a human wrote or confirmed the anchoring drawer. Starts at 0%
+  regardless of how much scan produced.
+
+Only source files enter the covered set; anchors legitimately point at manifests
+and directories too, and counting those against the source-file total produced a
+measured 110% before it was fixed.
+
+Both are warnings, never failures. An incomplete map is honest and unfinished,
+not wrong, and failing a build over it would only teach people to stop running
+the command.
+
+### 11.8 Portability of `.mcp.json`
+
+`.mcp.json` is committed and shared, so anything machine-specific inside it is a
+promise that breaks on the first clone.
+
+The entry therefore names a **command**, never a path:
+
+```json
+{ "command": "long-horizon-proxy", "args": [], "env": { … } }
+```
+
+`long-horizon-proxy` is a `bin` of this package, installed by `npm link`. The
+wrapper follows its own symlink to locate the repo, so the proxy is found
+wherever long-horizon actually lives on that machine. This is the same shape
+every working MCP config uses (`docker`, `npx`) and the only one that survives
+being handed to someone else.
+
+Naming a command moves a filesystem assumption into an installation
+requirement, so both ends are checked rather than assumed:
+
+| Condition | Reported by |
+|---|---|
+| `args` still contains a `proxy.ts` path | `doctor` — "hardcodes a machine-specific path"; `init` rewrites it |
+| `command` is not `long-horizon-proxy` | `doctor` |
+| `long-horizon-proxy` missing from PATH | `doctor` and `init`, with the install command |
+
+Verified end to end: a generated config contains no absolute path, and a full
+MCP `initialize` handshake completes through `long-horizon-proxy` → proxy →
+docker → MemPalace 3.5.0.
+
+### 11.9 Packaging and command surface
+
+Installed with `npm i -g github:sychus/long-horizon`. Node ≥ 20 (recursive
+`fs.watch` on Linux).
+
+TypeScript is compiled to `dist/` by a `prepare` script; `bin` entries point at
+the emitted JS, which keeps `tsx` out of the runtime entirely. That is not just
+tidiness — Claude Code spawns the proxy on every session, and transpiling on each
+spawn is latency paid forever.
+
+Emitting runnable ESM required adding explicit `.js` extensions to all 58
+relative imports. `moduleResolution: bundler` accepts extensionless specifiers in
+source, but Node rejects them at runtime; the first build produced a binary that
+compiled cleanly and died with `ERR_MODULE_NOT_FOUND` on launch. `tsc` does
+preserve the shebang, so `bin` can point straight at the emitted file.
+
+Three commands are installed:
+
+| Command | Purpose |
+|---|---|
+| `long-horizon` | CLI; no arguments opens the interactive menu |
+| `palace` | The same entrypoint, aliased for scripts, CI and agents |
+| `long-horizon-proxy` | Named by every project's `.mcp.json` (see §11.8) |
+
+The alias is load-bearing. Every menu entry is also a plain subcommand, because
+an interactive picker is unusable to the agents and CI jobs that are half this
+tool's audience. The menu therefore renders only when `stdin` is a TTY and falls
+back to usage otherwise — blocking on a keypress that cannot arrive is a hang.
+
+The menu is built on raw `stdin` keypress handling rather than a prompt library:
+this package is installed globally and spawned as an MCP server, so every
+dependency is one more way to break a user's session.
+
+### 11.10 `monitor`
+
+Merges three streams into one log:
+
+| Stream | Source | Purpose |
+|---|---|---|
+| `sync` | `fs.watch` on `.palace/` | Reindex changed drawers, debounced 1.5s |
+| `drift` | `fs.watch` on the repo root | An anchored file changed, so its drawer is suspect |
+| `agent` | Proxy WebSocket on the project's port | What the agent retrieved, and what it cost |
+
+Auto-sync is safe during a live agent session because of the concurrency result
+in §11.2: mining takes the exclusive lock, MCP reads do not. Syncs never overlap
+— a second concurrent miner would only lose the lock and file nothing — so an
+in-flight change sets a pending flag instead of starting a rival container.
+
+Drift watches the repository root recursively rather than one watcher per
+anchored file, which would exhaust descriptors on a large tree. The anchor index
+is rebuilt after every sync and on a 30s timer, so drawers added mid-session
+start being watched without a restart.
+
+Being disconnected from the proxy is the normal resting state, not an error: the
+proxy exists only while Claude Code has a MemPalace session open. It is reported
+once per transition and reconnected on a 3s timer.
+
+### 11.11 Extension changes
+
+The extension resolves its WebSocket port from the workspace `.mcp.json` rather
+than a fixed constant, watches that file to rebind when it changes, and names the
+observed wing in the status bar. Precedence: an explicitly pinned
+`long-horizon.wsPort` setting, then `.mcp.json`, then the default. The extension
+performs no writes; `Long Horizon: Setup` now delegates to the CLI in a terminal.
+
+Because the store is shared, its volume name is identical for every project and
+cannot identify the wing. The CLI records `PALACE_WING` in the MCP entry for
+exactly this reason — there is nothing else to infer it from.
+
+---
+
+## 12. Resolved Decisions
 
 1. **Palace structure bootstrap**: The proxy exposes a `GET /taxonomy` endpoint that calls `mempalace_get_taxonomy` on the downstream container and caches the result. The extension fetches this on connect to pre-populate the map with realistic structure before any traffic flows. The proxy remains transparent on the stdio pipe — the taxonomy call is a side-channel, not injected into the client↔server stream.
 2. **Token estimator**: Swap the ~4chars/tok heuristic for tiktoken in **Phase 1**. The estimation is a core value prop of the tool — shipping with a known-inaccurate heuristic undermines trust.

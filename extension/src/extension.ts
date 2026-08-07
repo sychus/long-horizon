@@ -1,26 +1,23 @@
 import * as vscode from "vscode";
 import WebSocket from "ws";
-import { DEFAULT_WS_PORT, type LongHorizonEvent } from "./types";
+import { type LongHorizonEvent } from "./types";
 import { StatusBarController } from "./statusbar";
 import { TimelineProvider } from "./timeline";
 import { MapPanel } from "./mapPanel";
 import { generateHtmlReport } from "./htmlReport";
 import { setupCommand, checkStatus } from "./setup";
+import { resolvePalace, type PalaceBinding } from "./palace";
 
 /** Shared session state consumed by the status bar and timeline. */
 export interface SessionState {
   events: LongHorizonEvent[];
   connected: boolean;
+  /** Which palace this workspace observes. Null until first resolved. */
+  palace: PalaceBinding | null;
   /** Notify all consumers that the events array changed. */
   onEvent: vscode.EventEmitter<LongHorizonEvent>;
   /** Notify all consumers of connection state changes. */
   onConnection: vscode.EventEmitter<boolean>;
-}
-
-function getPort(): number {
-  return vscode.workspace
-    .getConfiguration("long-horizon")
-    .get<number>("wsPort", DEFAULT_WS_PORT);
 }
 
 let ws: WebSocket | null = null;
@@ -54,10 +51,13 @@ async function replayBuffered(port: number, state: SessionState): Promise<void> 
   } catch { /* proxy not ready */ }
 }
 
-function connect(state: SessionState): void {
+async function connect(state: SessionState): Promise<void> {
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
 
-  const port = getPort();
+  // Re-resolved on every attempt: the workspace may have gained a .mcp.json, or
+  // the user may have switched to a project whose palace lives on another port.
+  state.palace = await resolvePalace();
+  const port = state.palace.port;
   const url = `ws://127.0.0.1:${port}/events`;
 
   ws = new WebSocket(url);
@@ -93,6 +93,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const state: SessionState = {
     events: [],
     connected: false,
+    palace: null,
     onEvent: new vscode.EventEmitter<LongHorizonEvent>(),
     onConnection: new vscode.EventEmitter<boolean>(),
   };
@@ -154,17 +155,26 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // Connect to proxy
-  connect(state);
+  void connect(state);
 
   // Reconnect on config change
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("long-horizon.wsPort")) {
         ws?.close();
-        connect(state);
+        void connect(state);
       }
     }),
   );
+
+  // `.mcp.json` carries the palace binding, so a change to it can move the
+  // proxy to a different port. Watch it and rebind rather than sitting on a
+  // dead socket until the next reload.
+  const mcpWatcher = vscode.workspace.createFileSystemWatcher("**/.mcp.json");
+  const rebind = () => { ws?.close(); void connect(state); };
+  mcpWatcher.onDidChange(rebind);
+  mcpWatcher.onDidCreate(rebind);
+  context.subscriptions.push(mcpWatcher);
 }
 
 export function deactivate(): void {

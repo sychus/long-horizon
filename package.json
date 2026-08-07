@@ -1,13 +1,29 @@
 {
   "name": "long-horizon",
   "version": "1.0.0",
-  "private": true,
-  "description": "Transparent MCP stdio proxy + visual observability for MemPalace retrieval",
+  "description": "One memory palace per project, plus live observability for MemPalace retrieval",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "long-horizon": "./dist/cli/palace.js",
+    "palace": "./dist/cli/palace.js",
+    "long-horizon-proxy": "./dist/src/proxy.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "SPEC.md",
+    "HELP.md"
+  ],
   "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "typecheck": "tsc --noEmit",
     "poc": "tsx src/harness.ts",
-    "proxy": "tsx src/proxy.ts",
-    "typecheck": "tsc --noEmit"
+    "dev:proxy": "tsx src/proxy.ts",
+    "dev:palace": "tsx cli/palace.ts"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
