@@ -15,6 +15,7 @@ import { resolveProject, palaceDir, roomDir, mcpPath } from "../project.js";
 import { ROOMS, renderConfig, ROOM_PLACEHOLDER } from "../taxonomy.js";
 import { dockerAvailable, imageExists, volumeExists, createVolume } from "../docker.js";
 import { writeMcpConfig, proxyCommandInstalled, PROXY_COMMAND, INSTALL_HINT } from "../mcp.js";
+import { upsertSection } from "../claudemd.js";
 import { heading, ok, info, warn, out, die, dim, bold, cyan } from "../ui.js";
 export async function init() {
     const project = resolveProject();
@@ -50,6 +51,16 @@ export async function init() {
     ok(`.palace/mempalace.yaml ${dim("(taxonomy — generated)")}`);
     writeMcpConfig(mcpPath(project), project);
     ok(`.mcp.json ${dim(`(${PROXY_COMMAND} → ${project.volume}, wing ${project.slug})`)}`);
+    // Registering the MCP server gives Claude the tools; this is what tells it to
+    // reach for them instead of reading the repository into context.
+    const claudeMd = upsertSection(project);
+    const note = {
+        created: "created — points Claude at the palace",
+        updated: "palace section refreshed, your own content untouched",
+        appended: "palace section added, your own content untouched",
+        unchanged: "already points Claude at the palace",
+    };
+    ok(`CLAUDE.md ${dim(`(${note[claudeMd]})`)}`);
     // The config names a command rather than a path so it survives being cloned,
     // which means the command has to exist on each machine that uses it.
     if (!proxyCommandInstalled()) {

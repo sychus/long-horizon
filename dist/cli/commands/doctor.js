@@ -21,6 +21,7 @@ import { computeCoverage, bar, pct } from "../coverage.js";
 import { volumeExists, dockerAvailable } from "../docker.js";
 import { readIndexState, wingTotal } from "../index-state.js";
 import { checkMcpConfig } from "../mcp.js";
+import { hasSection } from "../claudemd.js";
 import { heading, ok, warn, fail, info, hint, out, die, dim, bold, green, red, yellow } from "../ui.js";
 export async function doctor() {
     const project = resolveProject();
@@ -313,5 +314,16 @@ async function checkWiring(project, report) {
     }
     else {
         ok(`port ${project.port} is unique among ${siblings.length + 1} wing(s)`);
+    }
+    // A palace nothing points at is a palace nobody queries. The MCP server gives
+    // the agent the tools; this block is what tells it to use them.
+    if (hasSection(project)) {
+        ok("CLAUDE.md points Claude at the palace");
+    }
+    else {
+        warn("CLAUDE.md does not point Claude at the palace");
+        hint("an agent has the tools but no reason to prefer them over reading the repo");
+        hint("run `long-horizon init` to add the section");
+        report.warnings++;
     }
 }

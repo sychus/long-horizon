@@ -209,9 +209,32 @@ with `mempalace_search` into the room that answers the question. Compare that to
 a 2,000-line `CLAUDE.md` loaded whole, every time, most of it irrelevant to the
 task at hand.
 
-For this to work the agent has to know the palace is there. Claude Code picks up
-the MCP server from `.mcp.json` automatically — **restart it after `init`** — and
-the `palace` skill tells Claude how to use it.
+### How the agent knows to look
+
+Registering the MCP server gives Claude the *tools*. Nothing in that makes it
+prefer them over reading half the repository, so `init` also writes a short
+block into the project's `CLAUDE.md`:
+
+```markdown
+<!-- palace:start -->
+## Project memory
+
+This project keeps its knowledge in a memory palace at `.palace/`…
+**Search it before reading the codebase broadly.**
+**Do not add that knowledge to this file.**
+<!-- palace:end -->
+```
+
+That is not the large context file the palace replaces — it is what makes
+replacing it possible. It contains no architecture, no decisions and no
+vocabulary, because every line of that kind is paid for on every session.
+
+The markers mean re-running `init` refreshes only that block; anything else in
+your `CLAUDE.md` is left alone. It lives in the repo rather than a per-user
+skill so a teammate cloning the project inherits it, and `doctor` warns when it
+is missing.
+
+**Restart Claude Code after `init`** — `.mcp.json` is read at startup.
 
 Two habits keep it honest: run `long-horizon update` after filing anything, and
 don't let the palace duplicate what the code already says. A drawer's job is what
@@ -321,6 +344,7 @@ moves when someone reads a drawer, corrects it, and sets `reviewed: true`.
 | Source files no drawer points at |
 | Scan output nobody has reviewed |
 | Port shared with another wing |
+| `CLAUDE.md` does not point Claude at the palace |
 
 ---
 
