@@ -16,22 +16,64 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import * as path from "node:path";
 /**
- * Extensions treated as source for coverage and module grouping.
+ * What cannot be program source. Everything else is assumed to be.
  *
- * A language missing from this list does not fail loudly — it quietly reports a
- * project as mostly empty, which is the worst way to be wrong. Found exactly
- * that on a Flutter repo: 197 files, 25 recognised, and the "modules" were the
- * platform folders because every `.dart` file was invisible.
+ * This is deliberately a denylist, and the direction matters more than the
+ * contents. An allowlist of known languages fails *silently*: a project written
+ * in something not on the list reports as almost empty, and a map that says
+ * "there is nothing here" is indistinguishable from a small project. Measured
+ * on a real Flutter repo — 197 files, 25 recognised, and the detected "modules"
+ * were the platform folders, because every `.dart` file was invisible.
+ *
+ * Inverted, an unfamiliar language is source by default and works on day one,
+ * with no list to maintain. The failure mode flips too: a new kind of data file
+ * gets counted as source, which shows up as something visibly asking to be
+ * documented rather than as an absence nobody can see.
+ *
+ * No LLM is involved here on purpose. `scan` must be deterministic, offline and
+ * free — the same repo has to produce the same map every time, and asking a
+ * model "what counts as code here?" is exactly the kind of guess this command
+ * exists to keep out of the palace.
  */
-const SOURCE_EXT = new Set([
-    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-    ".py", ".go", ".rs", ".rb", ".java", ".kt", ".kts", ".swift", ".dart",
-    ".c", ".h", ".cc", ".cpp", ".hpp", ".m", ".mm",
-    ".cs", ".php", ".scala", ".ex", ".exs", ".erl", ".clj", ".cljs",
-    ".hs", ".ml", ".lua", ".zig", ".jl", ".r", ".pl", ".groovy",
-    ".vue", ".svelte", ".sh", ".bash", ".sql",
+const NON_SOURCE_EXT = new Set([
+    // prose
+    ".md", ".mdx", ".rst", ".txt", ".adoc", ".org",
+    // data and configuration (configuration is surfaced separately)
+    ".json", ".jsonc", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf",
+    ".xml", ".csv", ".tsv", ".properties", ".plist", ".lock", ".env",
+    // images, fonts, media
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp", ".tiff",
+    ".woff", ".woff2", ".ttf", ".otf", ".eot",
+    ".mp3", ".mp4", ".wav", ".mov", ".avi", ".webm", ".ogg", ".flac",
+    // archives and documents
+    ".pdf", ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar",
+    ".docx", ".xlsx", ".pptx",
+    // build output and binaries
+    ".map", ".log", ".snap", ".pyc", ".pyo", ".class", ".jar",
+    ".so", ".dylib", ".dll", ".exe", ".bin", ".o", ".a", ".wasm",
 ]);
 const TEST_HINT = /(^|[./_-])(test|tests|spec|specs|__tests__|e2e)([./_-]|$)/i;
+/**
+ * Directories holding generated output rather than authored code.
+ *
+ * Normally `.gitignore` keeps these out and git never reports them, but a repo
+ * can commit its build deliberately — this one commits `dist/` so global
+ * installs work — and then generated files look exactly like source. Measured
+ * here: `dist/` was reported as the largest module in this very repository.
+ *
+ * This is a hardcoded list, which is the thing that was wrong with the language
+ * allowlist above. It is defensible where that was not, for two reasons: build
+ * directory conventions are a small and slow-moving set, where programming
+ * languages are open-ended and keep arriving; and being wrong here is *visible*
+ * — a module named `dist` appears in the map and someone notices — where a
+ * missing language was invisible by construction.
+ */
+const GENERATED_DIRS = new Set([
+    "dist", "build", "out", "target", "coverage", "vendor", "node_modules",
+    ".next", ".nuxt", ".svelte-kit", ".output", "__pycache__", ".venv", "venv",
+    "Pods", "DerivedData", "obj",
+]);
+const isGenerated = (f) => f.split("/").some((segment) => GENERATED_DIRS.has(segment));
 /**
  * Ask git for the file list rather than walking the tree.
  *
@@ -129,7 +171,18 @@ const CONFIG_PATTERNS = [
     /^\.github$/, /^tox\.ini$/, /^ruff\.toml$/, /^\.mcp\.json$/,
     /^pubspec\.yaml$/, /^analysis_options\.yaml$/, /^go\.mod$/, /^Cargo\.toml$/,
 ];
-const isSource = (f) => SOURCE_EXT.has(path.extname(f));
+/**
+ * Extensionless files (LICENSE, Makefile, Dockerfile, CHANGELOG) are not counted
+ * as source. They are mostly licence text and build plumbing, and letting them
+ * in would inflate the coverage denominator with files nobody should be writing
+ * architecture notes about.
+ */
+const isSource = (f) => {
+    if (isGenerated(f))
+        return false;
+    const ext = path.extname(f).toLowerCase();
+    return ext !== "" && !NON_SOURCE_EXT.has(ext);
+};
 const isTest = (f) => TEST_HINT.test(f);
 export function inspectRepo(root) {
     // The palace describes the repo; it is not part of what needs describing.
