@@ -1,0 +1,44 @@
+name: CI
+
+# The pre-commit hook keeps dist/ in step locally, but hooks are opt-in per
+# clone — `git config core.hooksPath .githooks` has to be run once, and anyone
+# who skips it can push a source change with the previous build attached.
+# This is the backstop that catches it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Rebuild and prove dist/ matches the source
+        run: |
+          pnpm build
+          if ! git diff --exit-code --stat -- dist; then
+            echo "::error::dist/ does not match the source it is built from."
+            echo "Run 'pnpm build' and commit dist/ alongside your changes."
+            exit 1
+          fi
+
+      - name: Typecheck the extension
+        working-directory: extension
+        run: pnpm install --frozen-lockfile && pnpm typecheck

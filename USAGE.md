@@ -41,11 +41,20 @@ Installs three commands:
 | `palace` | Same CLI, aliased. **Use this in scripts, CI and agents.** |
 | `long-horizon-proxy` | Named by each project's `.mcp.json`. You never run it by hand. |
 
-`dist/` is committed, so nothing is compiled at install time. After changing
-source, run `pnpm build` and commit the output alongside it.
+`dist/` is committed, so nothing is compiled at install time.
 
-For local development, `pnpm link --global` from a clone points the commands at
-your working copy instead.
+Working on Long Horizon itself:
+
+```bash
+pnpm install
+pnpm setup:hooks          # required — keeps the committed dist/ in step
+pnpm link --global        # point the commands at your working copy
+```
+
+The pre-commit hook rebuilds `dist/` and stages it whenever you commit a change
+under `src/` or `cli/`. It refuses the commit if those paths have unstaged edits
+(the build would not match what you are committing) or if the source does not
+compile. CI re-checks the same thing, since hooks are opt-in per clone.
 
 ---
 

@@ -143,5 +143,18 @@ Working and in use, but young. Known rough edges:
 
 - Installs from git with **pnpm**; `npm i -g` from a git URL is broken by an npm
   bug that symlinks the package to a temp clone it then deletes.
-- `dist/` is committed, so source changes need a `pnpm build` committed with them.
+- `dist/` is committed, because a global install from git has no compiler. A
+  pre-commit hook rebuilds and stages it, and CI fails if the two ever diverge.
 - The VS Code extension is built and installed manually from `extension/`.
+
+## Developing
+
+```bash
+pnpm install
+pnpm setup:hooks          # required — keeps the committed dist/ in step
+pnpm link --global        # point the commands at your working copy
+```
+
+`pnpm setup:hooks` sets `core.hooksPath`. Without it you can commit a source
+change with the previous build attached, and nothing local will complain — CI
+catches it, but a lot later than the hook would.

@@ -19,6 +19,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "setup:hooks": "git config core.hooksPath .githooks",
     "typecheck": "tsc --noEmit",
     "poc": "tsx src/harness.ts",
     "dev:proxy": "tsx src/proxy.ts",

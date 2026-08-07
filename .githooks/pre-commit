@@ -1,0 +1,42 @@
+#!/usr/bin/env sh
+# Keep the committed dist/ honest.
+#
+# dist/ is committed because global installs from git have no compiler (see
+# tsconfig.json). That makes it possible to commit a source change and ship the
+# previous build — and nobody would notice, because everything still compiles,
+# every test passes, and the installed CLI is simply the old one.
+#
+# So: whenever compiled sources are staged, rebuild and make sure dist/ matches.
+
+set -e
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+# Nothing that affects dist/ — let the commit through untouched.
+if ! printf '%s\n' "$staged" | grep -qE '^(src/|cli/|tsconfig\.json$)'; then
+  exit 0
+fi
+
+# dist/ is built from the working tree, not from the index. If those disagree,
+# the rebuild would contain code that is not part of this commit — so refuse to
+# guess rather than commit output that matches nothing.
+if ! git diff --quiet -- src cli tsconfig.json; then
+  echo "pre-commit: unstaged changes in src/, cli/ or tsconfig.json." >&2
+  echo "  dist/ is built from the working tree, so it would not match this commit." >&2
+  echo "  Stage them (or stash them) and commit again." >&2
+  exit 1
+fi
+
+if [ ! -x node_modules/.bin/tsc ]; then
+  echo "pre-commit: typescript is not installed — run \`pnpm install\`." >&2
+  exit 1
+fi
+
+# A build failure aborts the commit on purpose: if the source does not compile,
+# dist/ cannot be regenerated, and committing would ship the previous build.
+node_modules/.bin/tsc
+
+if ! git diff --quiet -- dist; then
+  git add dist
+  echo "pre-commit: dist/ was stale — rebuilt and staged it."
+fi
