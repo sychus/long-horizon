@@ -27,6 +27,7 @@ import { doctor } from "./commands/doctor.js";
 import { monitor } from "./commands/monitor.js";
 import { context } from "./commands/context.js";
 import { map } from "./commands/map.js";
+import { search, type SearchArgs } from "./commands/search.js";
 import { showMenu } from "./menu.js";
 import { dockerAvailable, volumeExists } from "./docker.js";
 import { readIndexState } from "./index-state.js";
@@ -48,6 +49,7 @@ function usage(): void {
   out(`    ${cyan("monitor")}           watch live: auto-sync, code drift, agent retrieval`);
   out(`    ${cyan("context")}           show the orientation an agent gets for this project`);
   out(`    ${cyan("map")}               write a visual HTML map of the palace ${dim("(--open)")}`);
+  out(`    ${cyan("search")}            query the palace from the shell ${dim("(--room, --all-wings)")}`);
   out(`    ${cyan("file")}              author a drawer, validated at write time`);
   out(`    ${cyan("status")}            what is filed, on disk and in the index`);
   out(`    ${cyan("doctor")}            verify the map is accurate ${dim("(exits non-zero if not)")}`);
@@ -116,6 +118,25 @@ function parseFileArgs(argv: string[]): FileArgs {
   return args;
 }
 
+/** Everything that is not a flag is the query, so quoting is optional. */
+function parseSearchArgs(argv: string[]): SearchArgs {
+  const terms: string[] = [];
+  const args: SearchArgs = { query: "", allWings: false };
+
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i] ?? "";
+    const value = argv[i + 1];
+    if (flag === "--room") { args.room = value; i++; }
+    else if (flag === "--results") { args.results = Number(value) || undefined; i++; }
+    else if (flag === "--all-wings") args.allWings = true;
+    else if (flag.startsWith("--")) die(`Unknown flag: ${flag}`);
+    else terms.push(flag);
+  }
+
+  args.query = terms.join(" ").trim();
+  return args;
+}
+
 /**
  * With no arguments, offer the menu — but only to a human at a terminal.
  * Piped or non-interactive callers get usage, because a picker waiting on a
@@ -146,6 +167,7 @@ async function dispatch(command: string | undefined, rest: string[]): Promise<vo
     case "monitor": return monitor();
     case "context": return context();
     case "map": return map({ open: rest.includes("--open") });
+    case "search": return search(parseSearchArgs(rest));
     case "status": return status();
     case "doctor": return doctor();
     case "list": return list();

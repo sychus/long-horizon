@@ -17,7 +17,7 @@ import { ROOMS, renderConfig, ROOM_PLACEHOLDER } from "../taxonomy.js";
 import { dockerAvailable, imageExists, volumeExists, createVolume } from "../docker.js";
 import { writeMcpConfig, proxyCommandInstalled, PROXY_COMMAND, INSTALL_HINT } from "../mcp.js";
 import { upsertSection } from "../claudemd.js";
-import { heading, ok, info, warn, out, die, dim, bold, cyan } from "../ui.js";
+import { heading, ok, info, warn, out, die, dim, bold, cyan, yellow } from "../ui.js";
 
 export async function init(): Promise<void> {
   const project = resolveProject();
@@ -92,10 +92,24 @@ export async function init(): Promise<void> {
 
   // ---- next steps ------------------------------------------------------
   heading("Next");
-  out(`  1. Write notes into ${cyan(".palace/<room>/")} — or use ${cyan("palace file")}`);
-  out(`  2. ${cyan("palace sync")}    build the searchable index`);
-  out(`  3. ${cyan("palace doctor")}  verify the map is accurate`);
+  out(`  1. ${cyan("long-horizon scan")}    map the code that already exists`);
+  out(`  2. ${cyan("long-horizon update")}  build the searchable index`);
+  out(`  3. ${cyan("long-horizon doctor")}  verify the map is accurate`);
   out();
-  out(`  ${dim("Commit .palace/ and .mcp.json — the palace is versioned with the code.")}`);
+  out(`  ${dim("Commit .palace/, .mcp.json and CLAUDE.md — the palace is versioned with the code.")}`);
+
+  // Claude Code reads .mcp.json once at startup and cannot reload it, so the
+  // session that ran this command is precisely the one without the tools. Said
+  // quietly, that becomes a silent failure: the agent reads the whole repo
+  // instead and the palace looks useless on the day it was built.
+  if (process.env["CLAUDECODE"]) {
+    out();
+    out(`  ${yellow("▸")} ${bold("This Claude Code session cannot see the palace yet.")}`);
+    out(`    ${dim("Claude Code reads .mcp.json at startup and cannot reload it — the")}`);
+    out(`    ${dim("mempalace tools appear in your next session, not this one.")}`);
+    out();
+    out(`    ${dim("Nothing is blocked meanwhile:")} ${cyan("palace search \"...\"")} ${dim("works right now,")}`);
+    out(`    ${dim("in this session, over the same index.")}`);
+  }
   out();
 }

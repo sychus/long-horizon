@@ -127,6 +127,7 @@ your-project/
 | `file` | Writes one drawer, validated at write time. |
 | `status` | What is filed, on disk and in the index, side by side. |
 | `doctor` | Verifies the map. **Exits non-zero when it is wrong**, so it can gate CI. |
+| `search` | Query the palace from the shell. Works with no MCP server. |
 | `context` | Prints the orientation an agent loads for this project, and what it costs in tokens. |
 | `map` | Writes a self-contained HTML view of the whole palace. `--open` opens it. |
 | `list` | Every wing in the shared store. |
@@ -234,7 +235,26 @@ your `CLAUDE.md` is left alone. It lives in the repo rather than a per-user
 skill so a teammate cloning the project inherits it, and `doctor` warns when it
 is missing.
 
-**Restart Claude Code after `init`** — `.mcp.json` is read at startup.
+### The session that creates the palace
+
+Claude Code reads `.mcp.json` once, at startup, and cannot reload it. So the
+session that runs `init` is exactly the session without the `mempalace` tools —
+and that used to be a silent failure, because an agent with no tools just reads
+the repository instead and the palace looks useless on the day you built it.
+
+`palace search` closes it. The palace is queryable from the shell the moment it
+is indexed, by an agent or by you:
+
+```bash
+palace search "how is authentication isolated"
+palace search "rate limiting" --room decisions
+palace search "retry policy" --all-wings     # across every project
+```
+
+The MCP server is the faster path to the same data, not the only one. `init`
+says so explicitly when it detects it is running inside Claude Code, and the
+`CLAUDE.md` block tells the agent to use `palace search` rather than fall back to
+reading the repo when the tools are not listed.
 
 Two habits keep it honest: run `long-horizon update` after filing anything, and
 don't let the palace duplicate what the code already says. A drawer's job is what
