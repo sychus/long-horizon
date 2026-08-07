@@ -25,13 +25,26 @@ real files, and `doctor` keeps proving it true.
 ## Install
 
 ```bash
-pnpm setup                                # once per machine, if you never have
+pnpm setup          # once per machine
+exec $SHELL         # REQUIRED — see below
 pnpm add -g github:sychus/long-horizon
 ```
+
+> **`pnpm setup` needs a new shell before it takes effect.** It writes
+> `PNPM_HOME` into your shell profile; it cannot change the shell already
+> running. So the next command fails with `ERR_PNPM_NO_GLOBAL_BIN_DIR` even
+> though `pnpm setup` reports "everything is already up to date" — the profile
+> is fine, your current session just hasn't read it. `exec $SHELL` reloads in
+> place; a new terminal works too.
 
 > **Use pnpm, not npm.** `npm i -g` from a git URL symlinks the package to a
 > temporary clone directory that npm then deletes, leaving three broken
 > commands. Verified on npm 10 / Node 20. pnpm installs it correctly.
+
+> **If you previously ran `npm link` from a clone, remove it first** —
+> `npm rm -g long-horizon`. npm's bin directory usually precedes pnpm's on
+> `PATH`, so the linked copy keeps winning and you end up testing your working
+> tree while believing you are testing the installed release.
 
 Installs three commands:
 

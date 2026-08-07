@@ -46,9 +46,14 @@ what it costs.
 ## Install
 
 ```bash
-pnpm setup                                # once per machine, if you never have
+pnpm setup          # once per machine
+exec $SHELL         # required — pnpm setup only takes effect in a new shell
 pnpm add -g github:sychus/long-horizon
 ```
+
+If `pnpm add -g` reports `ERR_PNPM_NO_GLOBAL_BIN_DIR` right after a `pnpm setup`
+that said "already up to date", the reload is what's missing — see
+[USAGE.md](USAGE.md#install).
 
 ```bash
 cd your-project
