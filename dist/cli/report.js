@@ -22,6 +22,24 @@ const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, 
 function bodyText(body) {
     return body.replace(/^\s*#\s+.*$/m, "").trim();
 }
+/**
+ * Best available title: the metadata, else the note's own heading, else its
+ * filename.
+ *
+ * The middle case is load-bearing. Writing a plain markdown file straight into a
+ * room is a supported way to author, and such a file carries its title only as
+ * an `# H1` — which `bodyText` then strips. Without this fallback the heading
+ * was removed from the body *and* ignored as the title, so a hand-written note
+ * showed up as `pool-exhaustion.md` with its subject nowhere on the page.
+ */
+function drawerTitle(title, body, rel) {
+    if (title)
+        return title;
+    const heading = body.match(/^\s*#\s+(.+)$/m)?.[1];
+    if (heading)
+        return heading.trim();
+    return rel.split("/").pop() ?? rel;
+}
 const pct = (r) => `${Math.round(r * 100)}%`;
 function styles() {
     return `
@@ -247,7 +265,7 @@ function roomSections(input) {
         const items = drawers
             .map((d) => {
             const fm = d.parsed.frontmatter;
-            const title = fm.title ?? d.rel.split("/").pop() ?? d.rel;
+            const title = drawerTitle(fm.title, d.parsed.body, d.rel);
             const anchors = fm.anchors ?? [];
             const unreviewed = fm.origin === "scan" && fm.reviewed !== true;
             const body = bodyText(d.parsed.body);

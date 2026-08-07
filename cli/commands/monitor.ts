@@ -22,6 +22,7 @@ import * as path from "node:path";
 import { resolveProject, palaceDir, PALACE_DIR, type Project } from "../project.js";
 import { scanPalace } from "../drawers.js";
 import { mempalace, dockerAvailable, volumeExists, isLockContention } from "../docker.js";
+import { writeMap } from "./map.js";
 import { out, dim, bold, cyan, green, yellow, red, die, heading, info } from "../ui.js";
 
 /** Wait this long after the last change before syncing. */
@@ -225,6 +226,15 @@ export async function monitor(): Promise<void> {
       if (filed > 0) log("sync", `${filed} drawer(s) reindexed`);
       else log("sync", dim("nothing new"));
       anchors = anchorIndex(project);
+
+      // Rewrite the page so a browser tab left open on it is one refresh away
+      // from current, for as long as the monitor runs.
+      try {
+        await writeMap(project);
+        if (filed > 0) log("sync", dim("map refreshed"));
+      } catch {
+        log("sync", dim("map could not be refreshed"));
+      }
     }
 
     syncing = false;

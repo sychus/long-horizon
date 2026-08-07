@@ -26,16 +26,21 @@ function stamp() {
     const p = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
-export async function map(args) {
-    const project = resolveProject();
-    if (!existsSync(palaceDir(project))) {
-        die(`No palace here. Run \`long-horizon init\` first.`);
-    }
+/**
+ * Regenerate the page from the palace's current state.
+ *
+ * Exported because `update` and `monitor` call it too. A map you have to
+ * remember to regenerate is a map that is quietly out of date exactly when you
+ * reach for it, so writing it is a side effect of changing anything rather than
+ * a separate thing to run.
+ *
+ * Cheap by design: everything but the index count is read straight off disk, and
+ * a missing index degrades the page rather than failing it.
+ */
+export async function writeMap(project) {
     const scan = scanPalace(project);
     const facts = inspectRepo(project.root);
     const coverage = computeCoverage(project.root, facts, scan);
-    // The index is a nice-to-have here: without it the page still renders, it just
-    // cannot flag a room whose disk and index disagree.
     let indexed = null;
     if (await dockerAvailable()) {
         if (await volumeExists(project.volume)) {
@@ -44,27 +49,43 @@ export async function map(args) {
         }
     }
     const html = renderReport({ project, scan, coverage, facts, indexed, generatedAt: stamp() });
-    const target = path.join(palaceDir(project), "map.html");
-    mkdirSync(path.dirname(target), { recursive: true });
-    writeFileSync(target, html);
+    const file = path.join(palaceDir(project), "map.html");
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, html);
     // Kept out of git from inside the palace, so the project's own .gitignore is
     // never touched.
     const ignore = path.join(palaceDir(project), ".gitignore");
     if (!existsSync(ignore))
         writeFileSync(ignore, "map.html\n");
+    return {
+        file,
+        verifiedRatio: coverage.verifiedRatio,
+        blindSpots: coverage.unmapped.length,
+        indexRead: indexed !== null,
+    };
+}
+export async function map(args) {
+    const project = resolveProject();
+    if (!existsSync(palaceDir(project))) {
+        die(`No palace here. Run \`long-horizon init\` first.`);
+    }
+    const { file, verifiedRatio, blindSpots, indexRead } = await writeMap(project);
     heading(`Map for ${bold(project.slug)}`);
-    ok(path.relative(project.root, target));
-    info(`${coverage.total} source file(s) · ${Math.round(coverage.verifiedRatio * 100)}% verified · ${coverage.unmapped.length} blind spot(s)`);
-    if (!indexed)
+    ok(path.relative(project.root, file));
+    info(`${Math.round(verifiedRatio * 100)}% verified · ${blindSpots} blind spot(s)`);
+    if (!indexRead)
         warn("index not read — the page cannot flag rooms whose disk and index disagree");
     if (args.open) {
-        const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-        spawn(opener, [target], { detached: true, stdio: "ignore" }).unref();
+        openInBrowser(file);
         info("opening in your browser");
     }
     else {
         out();
-        out(`  ${dim("Open it, or re-run with")} ${cyan("--open")}`);
+        out(`  ${dim("Open it once and refresh — it is rewritten on every")} ${cyan("update")}`);
     }
     out();
+}
+export function openInBrowser(file) {
+    const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+    spawn(opener, [file], { detached: true, stdio: "ignore" }).unref();
 }

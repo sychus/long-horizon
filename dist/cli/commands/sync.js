@@ -15,6 +15,7 @@ import { existsSync } from "node:fs";
 import { resolveProject, palaceDir, PALACE_DIR } from "../project.js";
 import { mempalace, volumeExists, createVolume, dockerAvailable, stripNoise, isLockContention, } from "../docker.js";
 import { readIndexState } from "../index-state.js";
+import { writeMap } from "./map.js";
 import { heading, ok, warn, info, out, die, dim, cyan } from "../ui.js";
 const FILED = /Drawers filed:\s*(\d+)/;
 const SKIPPED = /Files skipped[^:]*:\s*(\d+)/;
@@ -99,8 +100,13 @@ export async function sync() {
         for (const [room, count] of [...state.rooms].sort()) {
             info(`${room.padEnd(13)} ${count} drawer(s)`);
         }
-        out();
-        out(`  ${dim("Verify with")} ${cyan("palace doctor")}`);
-        out();
     }
+    // The visual map is rewritten here rather than left to a separate command.
+    // One you have to remember to regenerate is one that is silently out of date
+    // exactly when you open it to check something.
+    const written = await writeMap(project);
+    info(`map refreshed — ${path.relative(project.root, written.file)}`);
+    out();
+    out(`  ${dim("Verify with")} ${cyan("palace doctor")}${dim(", or open the map and refresh.")}`);
+    out();
 }
