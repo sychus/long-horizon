@@ -127,6 +127,8 @@ your-project/
 | `file` | Writes one drawer, validated at write time. |
 | `status` | What is filed, on disk and in the index, side by side. |
 | `doctor` | Verifies the map. **Exits non-zero when it is wrong**, so it can gate CI. |
+| `context` | Prints the orientation an agent loads for this project, and what it costs in tokens. |
+| `map` | Writes a self-contained HTML view of the whole palace. `--open` opens it. |
 | `list` | Every wing in the shared store. |
 
 ### `scan`
@@ -182,6 +184,51 @@ Safe to run during a live Claude Code session: only indexing takes MemPalace's
 exclusive lock, reads never do, and contention is retried automatically.
 
 ---
+
+## Replacing the big prompt
+
+The point of a palace is that an agent stops needing a large context file it
+pays for in full on every session, relevant or not.
+
+```
+$ long-horizon context
+
+Context for my-app
+  · what an agent loads at the start of a session, about 323 tokens
+
+## L1 — ESSENTIAL STORY
+[architecture]
+  - # Structure overview  The repository has 41 source file(s) across 3 modules…
+[decisions]
+  - # ADR 001 Sessions over bearer tokens  Callers receive an opaque session
+    handle rather than a bearer token, so revoking access never requires…
+```
+
+A few hundred tokens of orientation, and everything else retrieved on demand
+with `mempalace_search` into the room that answers the question. Compare that to
+a 2,000-line `CLAUDE.md` loaded whole, every time, most of it irrelevant to the
+task at hand.
+
+For this to work the agent has to know the palace is there. Claude Code picks up
+the MCP server from `.mcp.json` automatically — **restart it after `init`** — and
+the `palace` skill tells Claude how to use it.
+
+Two habits keep it honest: run `long-horizon update` after filing anything, and
+don't let the palace duplicate what the code already says. A drawer's job is what
+reading the code *cannot* tell you.
+
+## Seeing what is in there
+
+```bash
+long-horizon map --open
+```
+
+Writes `.palace/map.html` — a self-contained page showing coverage per module,
+every room and drawer with its anchors, and the source files nothing points at.
+It is derived output, gitignored from inside `.palace/`, and cheap to regenerate.
+
+Use it when `doctor` says the map is fine but you want to know whether it is
+actually *good*: green with two drawers is not the same as green with forty.
 
 ## The seven rooms
 
