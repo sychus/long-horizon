@@ -25,6 +25,8 @@ export const MENU: readonly MenuItem[] = [
   { command: "scan", label: "scan", detail: "Map the current codebase into the skeleton. Safe to re-run." },
   { command: "sync", label: "update", detail: "Rebuild the searchable index from .palace/." },
   { command: "monitor", label: "monitor", detail: "Watch live: auto-sync, code drift, and what the agent retrieves." },
+  { command: "context", label: "context", detail: "Show the orientation an agent gets for this project, and what it costs." },
+  { command: "map", label: "map", detail: "Write a visual HTML map of the whole palace and open it." },
   { command: "doctor", label: "doctor", detail: "Verify the map is accurate and see what is still unverified." },
   { command: "status", label: "status", detail: "What is filed, on disk and in the index." },
   { command: "init", label: "init", detail: "Scaffold the palace and wire it into Claude Code." },

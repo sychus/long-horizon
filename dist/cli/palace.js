@@ -24,6 +24,8 @@ import { sync } from "./commands/sync.js";
 import { status } from "./commands/status.js";
 import { doctor } from "./commands/doctor.js";
 import { monitor } from "./commands/monitor.js";
+import { context } from "./commands/context.js";
+import { map } from "./commands/map.js";
 import { showMenu } from "./menu.js";
 import { dockerAvailable, volumeExists } from "./docker.js";
 import { readIndexState } from "./index-state.js";
@@ -42,6 +44,8 @@ function usage() {
     out(`    ${cyan("scan")}              map an existing codebase into the skeleton ${dim("(--dry-run)")}`);
     out(`    ${cyan("update")}            rebuild the searchable index ${dim("(alias: sync)")}`);
     out(`    ${cyan("monitor")}           watch live: auto-sync, code drift, agent retrieval`);
+    out(`    ${cyan("context")}           show the orientation an agent gets for this project`);
+    out(`    ${cyan("map")}               write a visual HTML map of the palace ${dim("(--open)")}`);
     out(`    ${cyan("file")}              author a drawer, validated at write time`);
     out(`    ${cyan("status")}            what is filed, on disk and in the index`);
     out(`    ${cyan("doctor")}            verify the map is accurate ${dim("(exits non-zero if not)")}`);
@@ -148,6 +152,8 @@ async function dispatch(command, rest) {
         case "sync":
         case "update": return sync();
         case "monitor": return monitor();
+        case "context": return context();
+        case "map": return map({ open: rest.includes("--open") });
         case "status": return status();
         case "doctor": return doctor();
         case "list": return list();

@@ -31,9 +31,22 @@ import * as path from "node:path";
  * write time and reconcile authoritatively in `palace doctor`.
  */
 export const MIN_BODY_CHARS = 40;
+/**
+ * Metadata goes at the *end*, inside an HTML comment.
+ *
+ * Leading YAML frontmatter is the convention, and it was actively harmful here.
+ * MemPalace previews a drawer by taking its first characters, so every search
+ * result and every line of `wake-up` opened with
+ * `--- room: architecture title: … origin: scan reviewed: false ---` instead of
+ * the note itself. Measured on a four-drawer palace: roughly half of a ~323
+ * token wake-up budget was spent restating frontmatter the agent already knows.
+ *
+ * Trailing it means previews start with the title and the first real sentence,
+ * which is the whole point of retrieval. The HTML comment keeps it invisible
+ * when the file is rendered on GitHub, where it is noise to a human reader too.
+ */
 export function renderDrawer(d) {
-    const lines = [
-        "---",
+    const meta = [
         `room: ${d.room}`,
         `title: ${d.title}`,
         `anchors: ${d.anchors.join(", ")}`,
@@ -41,24 +54,42 @@ export function renderDrawer(d) {
     ];
     // Only written when non-default, so hand-authored drawers stay uncluttered.
     if (d.origin && d.origin !== "human")
-        lines.push(`origin: ${d.origin}`);
+        meta.push(`origin: ${d.origin}`);
     if (d.reviewed != null)
-        lines.push(`reviewed: ${d.reviewed}`);
-    lines.push("---", "", `# ${d.title}`, "", d.body.trim(), "");
-    return lines.join("\n");
+        meta.push(`reviewed: ${d.reviewed}`);
+    return [
+        `# ${d.title}`,
+        "",
+        d.body.trim(),
+        "",
+        "<!--palace",
+        ...meta,
+        "-->",
+        "",
+    ].join("\n");
 }
 /**
- * Parse a drawer file. Tolerant by design: a file with no frontmatter is a
+ * Parse a drawer file. Tolerant by design: a file with no metadata is a
  * legitimate parse whose `hasFrontmatter` is false, and `palace doctor` decides
  * whether that is a problem. Parsing and judging are kept separate so the
  * doctor owns every verdict.
+ *
+ * Both layouts are accepted — trailing `<!--palace … -->` (what we write now)
+ * and leading `--- … ---` (what earlier versions wrote). Drawers are committed
+ * to real repositories, so a format change must never turn someone's existing
+ * notes into unparseable files.
  */
 export function parseDrawer(text) {
-    const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+    const trailing = text.match(/<!--palace\r?\n([\s\S]*?)\r?\n-->/);
+    const leading = trailing ? null : text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+    const match = trailing ?? leading;
     if (!match)
         return { frontmatter: {}, body: text, hasFrontmatter: false };
     const block = match[1] ?? "";
-    const body = match[2] ?? "";
+    // Trailing metadata: the body is everything before the comment block.
+    const body = trailing
+        ? text.slice(0, text.indexOf("<!--palace"))
+        : (match[2] ?? "");
     const frontmatter = {};
     for (const line of block.split(/\r?\n/)) {
         const kv = line.match(/^([a-z]+):[ \t]*(.*)$/);
