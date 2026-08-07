@@ -190,7 +190,7 @@ export async function monitor(): Promise<void> {
   heading(`Monitoring ${bold(project.slug)}`);
   info(`watching ${PALACE_DIR}/ and anchored code`);
   info(`proxy port ${project.port}`);
-  out(`  ${dim("q quit · s sync now · d doctor")}`);
+  out(`  ${dim("q quit · s sync now")}`);
   out();
 
   let anchors = anchorIndex(project);
@@ -296,7 +296,8 @@ export async function monitor(): Promise<void> {
     process.stdin.on("data", (key: string) => {
       if (key === "q" || key === "") shutdown();
       else if (key === "s") { log("info", "manual sync"); void runSync(); }
-      else if (key === "d") { log("info", "run `long-horizon doctor` in another shell"); }
+      // Deliberately no `doctor` key: it exits non-zero on failure, which would
+      // take the monitor down with it. Run it in another shell.
     });
   }
 

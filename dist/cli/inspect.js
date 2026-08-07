@@ -15,12 +15,21 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import * as path from "node:path";
-/** Extensions treated as source for coverage and module grouping. */
+/**
+ * Extensions treated as source for coverage and module grouping.
+ *
+ * A language missing from this list does not fail loudly — it quietly reports a
+ * project as mostly empty, which is the worst way to be wrong. Found exactly
+ * that on a Flutter repo: 197 files, 25 recognised, and the "modules" were the
+ * platform folders because every `.dart` file was invisible.
+ */
 const SOURCE_EXT = new Set([
     ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-    ".py", ".go", ".rs", ".rb", ".java", ".kt", ".swift",
-    ".c", ".h", ".cc", ".cpp", ".hpp", ".cs", ".php", ".scala", ".ex", ".exs",
-    ".vue", ".svelte",
+    ".py", ".go", ".rs", ".rb", ".java", ".kt", ".kts", ".swift", ".dart",
+    ".c", ".h", ".cc", ".cpp", ".hpp", ".m", ".mm",
+    ".cs", ".php", ".scala", ".ex", ".exs", ".erl", ".clj", ".cljs",
+    ".hs", ".ml", ".lua", ".zig", ".jl", ".r", ".pl", ".groovy",
+    ".vue", ".svelte", ".sh", ".bash", ".sql",
 ]);
 const TEST_HINT = /(^|[./_-])(test|tests|spec|specs|__tests__|e2e)([./_-]|$)/i;
 /**
@@ -88,12 +97,22 @@ function readManifest(root) {
             dependencies: Object.keys(pkg["dependencies"] ?? {}),
         };
     }
+    // Only the manifest's presence is used for these — entries and dependencies
+    // stay empty rather than half-parsed, since a partly-read manifest would put
+    // guesses into a map whose whole point is that it does not guess.
     const others = [
+        ["pubspec.yaml", "dart"],
         ["pyproject.toml", "python"],
         ["setup.py", "python"],
+        ["requirements.txt", "python"],
         ["go.mod", "go"],
         ["Cargo.toml", "rust"],
         ["Gemfile", "ruby"],
+        ["composer.json", "php"],
+        ["mix.exs", "elixir"],
+        ["build.gradle", "java"],
+        ["build.gradle.kts", "java"],
+        ["pom.xml", "java"],
     ];
     for (const [file, kind] of others) {
         if (existsSync(path.join(root, file))) {
@@ -108,6 +127,7 @@ const CONFIG_PATTERNS = [
     /^jest\.config\./, /^vitest\.config\./, /^playwright\.config\./, /^pytest\.ini$/,
     /^Dockerfile/, /^docker-compose/, /^Makefile$/, /^\.env\.example$/,
     /^\.github$/, /^tox\.ini$/, /^ruff\.toml$/, /^\.mcp\.json$/,
+    /^pubspec\.yaml$/, /^analysis_options\.yaml$/, /^go\.mod$/, /^Cargo\.toml$/,
 ];
 const isSource = (f) => SOURCE_EXT.has(path.extname(f));
 const isTest = (f) => TEST_HINT.test(f);
