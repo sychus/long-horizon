@@ -1,5 +1,9 @@
-dist
 node_modules
 .claude
 *.vsix
 .env
+
+# The root dist/ IS committed — see tsconfig.json. Global installs from git
+# skip devDependencies, so `prepare` has no compiler and must not be relied on.
+# The extension builds its own bundle and ships as a .vsix, so its output stays out.
+extension/dist

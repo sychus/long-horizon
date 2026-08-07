@@ -14,8 +14,12 @@
     "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": false,
 
-    "declaration": true,
-    "sourceMap": true,
+    // dist/ is committed so `npm i -g github:...` works — npm skips
+    // devDependencies on global installs, so `prepare` has no compiler to run.
+    // Declarations and sourcemaps are omitted to keep that committed output
+    // small: this ships as a CLI, not as a library anyone imports.
+    "declaration": false,
+    "sourceMap": false,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
