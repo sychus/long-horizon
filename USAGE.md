@@ -25,8 +25,13 @@ real files, and `doctor` keeps proving it true.
 ## Install
 
 ```bash
-npm i -g github:sychus/long-horizon
+pnpm setup                                # once per machine, if you never have
+pnpm add -g github:sychus/long-horizon
 ```
+
+> **Use pnpm, not npm.** `npm i -g` from a git URL symlinks the package to a
+> temporary clone directory that npm then deletes, leaving three broken
+> commands. Verified on npm 10 / Node 20. pnpm installs it correctly.
 
 Installs three commands:
 
@@ -36,7 +41,11 @@ Installs three commands:
 | `palace` | Same CLI, aliased. **Use this in scripts, CI and agents.** |
 | `long-horizon-proxy` | Named by each project's `.mcp.json`. You never run it by hand. |
 
-For local development, `npm link` from a clone does the same.
+`dist/` is committed, so nothing is compiled at install time. After changing
+source, run `pnpm build` and commit the output alongside it.
+
+For local development, `pnpm link --global` from a clone points the commands at
+your working copy instead.
 
 ---
 

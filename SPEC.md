@@ -59,6 +59,8 @@ The POC (validated) proves the proxy can intercept this traffic transparently. T
 
 - Protocol intact: full MCP handshake passes through proxy unmodified.
 - `tools/list` alone = **~4604 tokens** of overhead per session (7× a typical `mempalace_search` response at ~644 tok). This is the first thing the UI must surface.
+
+  *Re-measured against MemPalace 3.5.0 with the tiktoken estimator that replaced the 4-chars/token heuristic (§11 era): `tools/list` is **5102 tokens** and a real `mempalace_search` **1573**, so the ratio is ~3×, not 7×. The finding holds — the handshake still costs multiples of a retrieval — but the original figures were produced by the heuristic and should not be quoted as current.*
 - Latency is measurable per request-response pair via JSON-RPC id correlation.
 
 ---
